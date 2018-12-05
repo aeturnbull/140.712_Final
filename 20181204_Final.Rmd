@@ -1,0 +1,124 @@
+---
+title: "20181204_140712_Final"
+author: "Alison E. Turnbull"
+date: "December 4, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library("tidyverse")
+```
+
+### Motivation and Overview: Provide an overview of the project goals and the motivation for it. Consider that this will be read by people who did not see your project proposal.
+
+### Related Work: Anything that inspired you, such as a paper, a web site, or something we discussed in class.
+
+### Initial Questions: What questions are you trying to answer? How did these questions evolve over the course of the project? What new questions did you consider in the course of your analysis?
+
+### Data: What is the data source? Document the data import, wrangling, etc.
+
+##### These data were collected as part of an IRB-approved randomized train of an intervention designed 
+
+
+
+##### Because there are potential identifiers in the data, I am going to create a de-identified version for this analysis.  This next chunk cannot be evaluated, but it will show you where the data frame containing data on the physicians who participated in the study came from and was wrangled.  I will then remove these original data frames, leaving behind only the di-identified version for the rest of this analysis. 
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+## Loading in the study data which is contained in multiple dataframes connected by a shared unique identifier variable called "uid"
+    load("X:/Moore Early Career Investigator Award/Aim 3/Study Data/Data shared with Di Chen/[20180312] dataset v5/20180313_SCIP data & codebook.RData")
+
+## Loading data on location of home hospital and merging that information into the dataframe containing physician characteristics
+    location<-read_csv("20180704_Participant hospital locations.csv")
+    md<-merge(md, location, by="uid")
+
+## Extracting variables relevant to this analysis    
+ ## The md dataframe contains physician characteristics
+    md<-md %>%
+        select(uid, age, gender, race, tx, religion_importance, icu_weeks, icu_type, train_med, train_sx, train_em, train_anes, hosp_ac_st_univ, baltimore, state)
+    
+ ## The pre_dta dataframe contains data the doctors self-reported before the simulation
+    pre_dta<-pre_dta %>%
+        select(uid, prognosis_survive, prognosis_mc, consult_palliative)
+    
+ #The post_dta dataframe contains data the doctors self-reported after the simulation       
+    post_dta<-post_dta %>%
+        select(uid, disagreement_perceived, tracheotomy, withdraw_life_support)
+    
+ #The post_sp dataframe contains actor assessments of the simulation reported immediately afterward
+    post_sp<-post_sp %>%
+        select(uid, effort_to_help, effort_to_listen, effort_to_include, disagreement, sp)
+    
+ #The outcome dataframe contains assessments of the simulations provided by blinded colleague reviewers reading transcriptions
+    outcome<-outcome %>%
+        filter(assesser=="final") %>%
+        select(uid, comfort, comfort_understandable, withdraw, death, death_word, prognosis, assesser)
+    
+## Merging all these data sources together     
+    dta<-Reduce(function(x, y) merge(x, y, by="uid"), list(md, pre_dta, post_dta, post_sp, outcome))
+    
+ ## Removing redundant dataframes and those with potentially identifying information
+    rm(key, location, md, outcome, post_dta, post_sp, pre_dta)
+     
+    write_csv(dta, "140.712_Final_dta.csv") 
+```
+
+##### Reading in sharable csv files  
+```{r, warning=FALSE, message=FALSE}
+    dta<-read_csv("140.712_Final_dta.csv")
+    sum_measures<-read_csv("summary_measures.csv")
+        ## Renaming the unique identifier in this dataframe for merging purposes:
+        sum_measures<-rename(sum_measures, uid=study_id)
+    
+    ## Here's data on how long each simulation went on.
+    duration<-read_csv("20180810_Simulation_duration.csv")
+    sum_measures<-merge(sum_measures, duration, by="uid")
+```
+
+##### Cleaning the summary measures and creating new variables
+```{r}
+sum_measures<-sum_measures %>%
+    mutate(mins=signif(as.numeric(duration/60)), 3) %>%          ## Total duration of the simulation in minutes
+    mutate(wrd_total=wrd_cnt_phys+wrd_cnt_prox) %>%              ## Total number of words spoken during simulation
+    
+    mutate(totalwrd_per_min=wrd_total/mins) %>%                  ## Total words per minute within simulation
+    mutate(physwrd_per_min=wrd_cnt_phys/mins) %>%                ## Physician words per minute
+    mutate(proxwrd_per_min=wrd_cnt_prox/mins) %>%                ## Proxy words per minute
+    mutate(wrdratio_physprox=wrd_cnt_phys/wrd_cnt_prox) %>%      ## Ratio of physician:proxy words
+    
+    mutate(uttratio_physprox=uttr_cnt_phys/uttr_cnt_prox) %>%    ## Ratio of physician:proxy utterances
+    
+    mutate(i_my_cnt=pron_i_cnt+pron_my_cnt) %>%                  ## Count of the number of the pronouns "I" and "my"
+    mutate(you_your_cnt=pron_you_cnt+pron_your_cnt) %>%          ## Count of the number of the pronouns "you" and "your"
+    mutate(she_hers=pron_she_cnt+pron_her_cnt+pron_hers_cnt) %>% ## Count of the number of the pronouns "she" and "her" and "hers"
+    mutate(he_his=pron_he_cnt+pron_his_cnt) %>%                  ## Count of the number of the pronouns "he" and "his"
+    mutate(i_my_prop=signif(i_my_cnt/wrd_total, 3)) %>%          ## Proportion of all words that are "I" or "my"
+    mutate(you_your_prop=signif(you_your_cnt/wrd_total, 3)) %>%  ## Proportion of all words that are "you" or "yours"
+    mutate(she_her_prop=signif(she_hers/wrd_total, 3)) %>%       ## Proportion of all words that are "her" or "hers"
+    mutate(he_his_prop=signif(he_his/wrd_total, 3))  %>%         ## Proportion of all words that are "he" or "his"
+    
+    mutate(phys_verb_prop=signif(phys_verb_cnt/wrd_cnt_phys, 3)) %>%     ## Proportion of physician words that are verbs
+    mutate(phys_noun_prop=signif(phys_noun_cnt/wrd_cnt_phys, 3)) %>%     ## Proportion of physician words that are verbs
+    mutate(phys_adj_prop=signif(phys_adjective_cnt/wrd_cnt_phys, 3)) %>% ## Proportion of physician words that are verbs
+    mutate(phys_adv_prop=signif(phys_adverb_cnt/wrd_cnt_phys, 3))%>%     ## Proportion of physician words that are verbs
+    
+    mutate(voa_prop=signif(voa_cnt/wrd_total, 3)) %>%                    ## Proportion of words in the VOA lexicon
+    mutate(nlm_prop=signif(nlm_minus_voa_cnt/wrd_total, 3))              ## Proportion of words in the nlm but not not VOA lexicon
+    
+    
+    ## Keeping the cleaned features
+    sum_measures<-sum_measures %>%
+        select(uid, wrd_total, wrd_cnt_phys, wrd_cnt_prox, wrdratio_physprox, mins, totalwrd_per_min, 
+              physwrd_per_min, proxwrd_per_min, uttratio_physprox, mean_wrds_uttr_phys, median_wrds_uttr_phys, 
+              mean_wrds_uttr_prox, median_wrds_uttr_prox,
+              voa_prop, nlm_prop, fk_score, gf_score, pattern_sent,
+              wwbp_to_past, wwbp_to_present, wwbp_to_future,
+              i_my_prop, you_your_prop, she_her_prop, he_his_prop, 
+              phys_verb_prop, phys_noun_prop, phys_adj_prop, phys_adv_prop)
+```
+
+
+*Exploratory Data Analysis: What visualizations did you use to look at your data in different ways? What are the different statistical methods you considered? Justify the decisions you made, and show any major changes to your ideas. How did you reach these conclusions? You should use this section to motivate the statistical analyses that you decided to use in the next section.
+
+*Data Analysis: What statistical or computational method did you apply and why? What others did you consider?
+
+*Narrative and Summary: What did you learn about the data? How did you answer the questions? How can you justify your answers? What are the limitations of the analyses?
