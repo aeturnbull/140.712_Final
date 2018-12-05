@@ -16,13 +16,25 @@ library("tidyverse")
 
 ### Initial Questions: What questions are you trying to answer? How did these questions evolve over the course of the project? What new questions did you consider in the course of your analysis?
 
+##### The three main questions I want to answer are: 
+    1. Are there patterns of textual features within the simulation transcripts that cluster together? 
+        + If so, how can the clusters be described?
+        + Are there strong correlations between cluster and physician characteristics?
+        + Do the clusters correlate with how the actors or physician colleagues rated the doctors?
+
+    2. Which textual features best predict whether the physician colleagues think prognosis for survival was disclosed? 
+    
+    3. Are there correlations between either MD characteristics or actor rating and predicted probability the colleagues think the physician disclosed prognosis?
+    
+
+
 ### Data: What is the data source? Document the data import, wrangling, etc.
 
 ##### These data were collected as part of an IRB-approved randomized train of an intervention designed 
 
 
 
-##### Because there are potential identifiers in the data, I am going to create a de-identified version for this analysis.  This next chunk cannot be evaluated, but it will show you where the data frame containing data on the physicians who participated in the study came from and was wrangled.  I will then remove these original data frames, leaving behind only the di-identified version for the rest of this analysis. 
+##### Because there are potential identifiers in the data, I am going to create a de-identified version for this analysis.  This next chunk cannot be evaluated, but it will show you where the data frame containing data on physician characteristics came from and how it was wrangled.  I will then remove these data frames, leaving behind only the di-identified version for the rest of this analysis. 
 ```{r, warning=FALSE, message=FALSE, eval=FALSE}
 ## Loading in the study data which is contained in multiple dataframes connected by a shared unique identifier variable called "uid"
     load("X:/Moore Early Career Investigator Award/Aim 3/Study Data/Data shared with Di Chen/[20180312] dataset v5/20180313_SCIP data & codebook.RData")
@@ -105,7 +117,7 @@ sum_measures<-sum_measures %>%
     mutate(nlm_prop=signif(nlm_minus_voa_cnt/wrd_total, 3))              ## Proportion of words in the nlm but not not VOA lexicon
     
     
-    ## Keeping the cleaned features
+    ## Keeping the scaled, cleaned features
     sum_measures<-sum_measures %>%
         select(uid, wrd_total, wrd_cnt_phys, wrd_cnt_prox, wrdratio_physprox, mins, totalwrd_per_min, 
               physwrd_per_min, proxwrd_per_min, uttratio_physprox, mean_wrds_uttr_phys, median_wrds_uttr_phys, 
@@ -118,6 +130,136 @@ sum_measures<-sum_measures %>%
 
 
 *Exploratory Data Analysis: What visualizations did you use to look at your data in different ways? What are the different statistical methods you considered? Justify the decisions you made, and show any major changes to your ideas. How did you reach these conclusions? You should use this section to motivate the statistical analyses that you decided to use in the next section.
+
+
+##### First exploring the physician characteristics
+```{r}
+dta_long_con<-dta %>%
+    select(uid, age, icu_weeks, disagreement, disagreement_perceived, effort_to_help, effort_to_listen, effort_to_include) %>%
+    gather(key=feature, value = value, -uid) 
+
+dta_long_con %>%
+    ggplot(aes(value)) +
+    geom_density(alpha=0.5)+
+    facet_wrap( ~feature, scales='free', ncol=3) +
+    labs(x = NULL, y = NULL) +
+    theme_bw()
+
+dta_long_cat<-dta %>%
+    select(-c(age, icu_weeks, disagreement, disagreement_perceived, effort_to_help, effort_to_listen, effort_to_include)) %>%
+    gather(key=feature, value = value, -uid) 
+
+dta_long_cat %>%
+    ggplot(aes(value)) +
+    geom_bar() +
+    facet_wrap( ~feature, scales='free', ncol=5) +
+    labs(x = NULL, y = NULL) +
+    theme_bw()
+```
+
+```{r, warning=FALSE, message=FALSE}
+library("GGally")
+## Relationships between MD characteristics their case management, and their colleagues' assessment of whether prognosis for survival was disclosed
+dta %>%
+    mutate(religion=ifelse(religion_importance=="Extremely" | religion_importance=="Very" | religion_importance=="Moderately", 1, 0)) %>%
+    mutate(religion=factor(religion)) %>%
+    select(age, icu_weeks, baltimore, gender, religion, prognosis_survive, death) %>%
+    ggpairs()
+```    
+
+
+```{r, warning=FALSE, message=FALSE}
+## Relationships between how actors perceived the physicians and whether the physicians reported conflict during the simulation, colored by disclosure    
+dta %>%
+    select(disagreement, effort_to_help, effort_to_listen, effort_to_include, disagreement_perceived, death) %>%
+    ggpairs(aes(color=factor(death)))
+```
+
+```{r, warning=FALSE, message=FALSE}
+## Relationships between how actors perceived the physicians and whether the physicians reported conflict during the simulation, colored by actor    
+dta %>%
+    select(disagreement, effort_to_help, effort_to_listen, effort_to_include, disagreement_perceived, sp) %>%
+    ggpairs(aes(color=factor(sp)))
+```
+
+
+```{r, warning=FALSE, message=FALSE}
+## Now exploring the transcript characteristics
+transcripts_long<-sum_measures %>%
+    gather(key=feature, value = value, -uid) 
+
+transcripts_long %>%
+    ggplot(aes(value)) +
+        geom_density(alpha=0.5)+
+        facet_wrap( ~feature, scales='free', ncol=6) +
+        labs(x = NULL, y = NULL) +
+        theme_bw()
+```
+
+```{r, warning=FALSE, message=FALSE}
+## Transcript features by whether colleagues thought death was disclosed
+sum_measures %>%
+    arrange(uid) %>%
+    mutate(disclose = dta$death) %>%
+    select(wrd_total, wrd_cnt_phys, wrd_cnt_prox, wrdratio_physprox, disclose) %>%
+    ggpairs(aes(color=factor(disclose), alpha=0.5))
+```
+
+```{r, warning=FALSE, message=FALSE}
+sum_measures %>%
+    arrange(uid) %>%
+    mutate(disclose = dta$death) %>%
+    select(mins, totalwrd_per_min, physwrd_per_min, proxwrd_per_min, disclose) %>%
+    ggpairs(aes(color=factor(disclose), alpha=0.5))
+```
+##### Wow.  So, meetings were a little longer, and there are definitely fewer words per minute spoken when prognosis was disclosed. 
+
+```{r, warning=FALSE, message=FALSE}
+sum_measures %>%
+    arrange(uid) %>%
+    mutate(disclose = dta$death) %>%
+    select(uttratio_physprox, mean_wrds_uttr_phys, median_wrds_uttr_phys, mean_wrds_uttr_prox, median_wrds_uttr_prox, disclose) %>%
+    ggpairs(aes(color=factor(disclose), alpha=0.5))
+```
+##### Huh, looks like physicians always speak in paragraphs of about the same length, but proxies spoke a little longer if prognosis was disclosed. 
+##### There are some physician:proxy utterance ratio outliers that are interesting too. 
+
+```{r, warning=FALSE, message=FALSE}
+sum_measures %>%
+    arrange(uid) %>%
+    mutate(disclose = dta$death) %>%
+    select(voa_prop, nlm_prop, fk_score, gf_score, disclose) %>%
+    ggpairs(aes(color=factor(disclose), alpha=0.5))
+```
+##### What's interseting is how little variability there is here.  Disclosure does NOT appear to be correlated with how simple or complex physician language is. 
+
+```{r, warning=FALSE, message=FALSE}
+sum_measures %>%
+    arrange(uid) %>%
+    mutate(disclose = dta$death) %>%
+    select(pattern_sent, wwbp_to_past, wwbp_to_present, wwbp_to_future, disclose) %>%
+    ggpairs(aes(color=factor(disclose), alpha=0.5))
+```
+##### Really nothing of obvious interest here. 
+
+```{r, warning=FALSE, message=FALSE}
+sum_measures %>%
+    arrange(uid) %>%
+    mutate(disclose = dta$death) %>%
+    select(i_my_prop, you_your_prop, she_her_prop, he_his_prop, disclose) %>%
+    ggpairs(aes(color=factor(disclose), alpha=0.5))
+```
+### Huh.  There's an interesting shift toward the words "i" and "my" when prognosis is disclosed. 
+
+```{r, warning=FALSE, message=FALSE}
+sum_measures %>%
+    arrange(uid) %>%
+    mutate(disclose = dta$death) %>%
+    select(phys_verb_prop, phys_noun_prop, phys_adj_prop, phys_adv_prop, disclose) %>%
+    ggpairs(aes(color=factor(disclose), alpha=0.5))
+```
+##### I'm not seeing anything very interesting here.  
+
 
 *Data Analysis: What statistical or computational method did you apply and why? What others did you consider?
 
