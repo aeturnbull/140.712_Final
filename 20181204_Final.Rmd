@@ -16,15 +16,15 @@ library("tidyverse")
 
 ### Initial Questions: What questions are you trying to answer? How did these questions evolve over the course of the project? What new questions did you consider in the course of your analysis?
 
-##### The three main questions I want to answer are: 
-    1. Are there patterns of textual features within the simulation transcripts that cluster together? 
-        + If so, how can the clusters be described?
-        + Are there strong correlations between cluster and physician characteristics?
-        + Do the clusters correlate with how the actors or physician colleagues rated the doctors?
+##### The two main questions I want to answer are: 
 
-    2. Which textual features best predict whether the physician colleagues think prognosis for survival was disclosed? 
-    
-    3. Are there correlations between either MD characteristics or actor rating and predicted probability the colleagues think the physician disclosed prognosis?
+1. Are there patterns in the way physicians in this study conversed with family members during the simulated family meetings? 
+        a. Are there textual features within the simulation transcripts that cluster together? 
+            + If so, how can the clusters be described?
+        b. Are there physician characteristics that are correlated with the 3 clusters?
+        c. Do the clusters correlate with how the actors or physician colleagues rated the doctors?
+
+2. Which textual features best predict whether the physician colleagues think prognosis for survival was disclosed? Are there correlations between either MD characteristics or actor rating and predicted probability the colleagues think the physician disclosed prognosis?
     
 
 
@@ -88,6 +88,9 @@ library("tidyverse")
 
 ##### Cleaning the summary measures and creating new variables
 ```{r}
+    dta<-dta %>% arrange(uid)
+    sum_measures<-sum_measures %>% arrange(uid)
+
 sum_measures<-sum_measures %>%
     mutate(mins=signif(as.numeric(duration/60)), 3) %>%          ## Total duration of the simulation in minutes
     mutate(wrd_total=wrd_cnt_phys+wrd_cnt_prox) %>%              ## Total number of words spoken during simulation
@@ -114,7 +117,8 @@ sum_measures<-sum_measures %>%
     mutate(phys_adv_prop=signif(phys_adverb_cnt/wrd_cnt_phys, 3))%>%     ## Proportion of physician words that are verbs
     
     mutate(voa_prop=signif(voa_cnt/wrd_total, 3)) %>%                    ## Proportion of words in the VOA lexicon
-    mutate(nlm_prop=signif(nlm_minus_voa_cnt/wrd_total, 3))              ## Proportion of words in the nlm but not not VOA lexicon
+    mutate(nlm_prop=signif(nlm_minus_voa_cnt/wrd_total, 3)) %>%          ## Proportion of words in the nlm but not not VOA lexicon
+    mutate(death_word=dta$death_word)                                    ## Also, there's a variable currently in the "dta" dataframe which indicates whether the physician used the words "death", "die", or "dying."
     
     
     ## Keeping the scaled, cleaned features
@@ -125,7 +129,7 @@ sum_measures<-sum_measures %>%
               voa_prop, nlm_prop, fk_score, gf_score, pattern_sent,
               wwbp_to_past, wwbp_to_present, wwbp_to_future,
               i_my_prop, you_your_prop, she_her_prop, he_his_prop, 
-              phys_verb_prop, phys_noun_prop, phys_adj_prop, phys_adv_prop)
+              phys_verb_prop, phys_noun_prop, phys_adj_prop, phys_adv_prop, death_word)
 ```
 
 
@@ -190,7 +194,7 @@ transcripts_long<-sum_measures %>%
 
 transcripts_long %>%
     ggplot(aes(value)) +
-        geom_density(alpha=0.5)+
+        geom_density()+
         facet_wrap( ~feature, scales='free', ncol=6) +
         labs(x = NULL, y = NULL) +
         theme_bw()
@@ -255,12 +259,128 @@ sum_measures %>%
 sum_measures %>%
     arrange(uid) %>%
     mutate(disclose = dta$death) %>%
-    select(phys_verb_prop, phys_noun_prop, phys_adj_prop, phys_adv_prop, disclose) %>%
+    select(phys_verb_prop, phys_noun_prop, phys_adj_prop, phys_adv_prop, death_word, disclose) %>%
     ggpairs(aes(color=factor(disclose), alpha=0.5))
 ```
 ##### I'm not seeing anything very interesting here.  
 
 
 *Data Analysis: What statistical or computational method did you apply and why? What others did you consider?
+
+1. Are there patterns in the way physicians in this study conversed with family members during the simulated family meetings? 
+        a. Are there textual features within the simulation transcripts that cluster together? 
+            + If so, how can the clusters be described?
+            + Are there strong correlations between cluster and physician characteristics?
+            + Do the clusters correlate with how the actors or physician colleagues rated the doctors?
+
+```{r, warning=FALSE, message=FALSE}
+install.packages("rafalib")
+library("rafalib")
+
+## Step 1: computing the distance between each transcript using two different distances
+    matrix_measures<-sum_measures %>%
+        select(-c(uid))
+
+    ## Looking for NAs that can screw up these next functions
+    matrix_measures %>%
+            summarise_all(funs(sum(is.na(.))))
+    
+    ## This is an easy fix - this was coded NA if colleagues didn't think they disclosed prognosis at all, let alone explicitly. 
+    matrix_measures[which(is.na(matrix_measures$death_word)), "death_word"]    <-"No"
+    
+    ## Distance matrices using two measures
+    d_euclid = dist(matrix_measures, method="euclidean")
+    d_manhat = dist(matrix_measures, method="manhattan")
+    
+    ## Hierarchical clustering
+    hc_euclid<-hclust(d_euclid)
+    hc_manhat<-hclust(d_manhat)
+    
+    ## Add labels
+    hc_euclid$labels<-dta$uid
+    hc_manhat$labels<-dta$uid
+    
+    ## First lets see how the trial arms disperse across the clusters
+    myplclust(hc_euclid, lab.col = as.numeric(as.factor(dta$tx)), cex=0.5)  
+    myplclust(hc_manhat, lab.col = as.numeric(as.factor(dta$tx)), cex=0.5)  
+```
+
+Nope, nothing related to trial arm but 3 clear clusters with an outlier.
+
+```{r, warning=FALSE, message=FALSE}    
+    ## And now looking at whether there's a pattern by whether colleagues thought prognosis was disclosed
+    myplclust(hc_euclid, lab.col = as.numeric(as.factor(dta$death)), cex=0.5)  
+    myplclust(hc_manhat, lab.col = as.numeric(as.factor(dta$death)), cex=0.5) 
+```
+Huh, so, the cluster on the far right seems to be almost entirely red - interesting.
+I guess the good news is that euclidian vs manhattan distance doesn't seem to matter. 
+There looks like there are 3 pretty clear clusters and #72 is a real outlier.
+
+```{r, warning=FALSE, message=FALSE}
+    ## Creating the clusters by cutting the tree
+    eu_clusters<-cutree(hc_euclid, h=4000)
+
+    ## Attaching these cluster designations to the dataframe of transcript characteristics
+    sum_measures$cluster<-eu_clusters
+    sum_measures[which(sum_measures$uid==72), "cluster"]<-2  #I'm moving this outlier into cluster 2 so we only have 3 groups.
+```
+
+#####Returning to my first question: 
+1. Are there patterns in the way physicians in this study conversed with family members during the simulated family meetings? 
+        a. Are there textual features within the simulation transcripts that cluster together? 
+            + If so, how can the clusters be described?
+```{r}
+    library("tableone")
+    CreateTableOne(strata="cluster", data=sum_measures)
+```
+
+Cool!  Cluster 2 is really interesting - these 14 simulations were almost twice as long, had nearly twice as many words, and more physician words per minute but no more proxy words per minute.  There were also more words per physician utterance, and they were about twice as likely to say the one of the big D words (death, die, or dying).  Differentiating between clusters 1 and 3 is a little harder, but cluster 3 were VERY short meetings in general.  I wonder if they cluster 3 is the physicians who essentially just went in the room and gave a quick update.  
+
+##### Moving on to question 1b. Are there physician characteristics that are correlated with the 3 clusters?
+
+```{r, warning=FALSE, message=FALSE}
+## Attaching these cluster designations to the dataframe of physician characteristics
+    dta$cluster<-eu_clusters
+    dta[which(sum_measures$uid==72), "cluster"]<-2  #I'm moving this outlier into cluster 2 so we only have 3 groups.
+    
+    MDTable<-dta %>%
+        mutate(Race = fct_collapse(race, 
+                                   white = "White", 
+                                   asian = "Asian", 
+                                   other = c("Black or African American", "More than one race", "Prefer not to answer"))) %>%
+        mutate(Religion_importance = fct_collapse(religion_importance, 
+                                   high = c("Extremely", "Very"), 
+                                   moderate = "Moderately", 
+                                   low = c("Slightly", "Not at all"), 
+                                   Missing = "Prefer not to answer")) %>%
+        select(cluster, age, gender, Race, Religion_importance, icu_weeks, icu_type, train_med, train_sx, train_em, train_anes, hosp_ac_st_univ, 
+               baltimore, prognosis_survive, prognosis_mc, consult_palliative, disagreement_perceived, tracheotomy, withdraw_life_support)
+        
+        CreateTableOne(strata = "cluster", data=MDTable)
+```
+
+What's most striking here is how few physician characteristics differ by cluster.  So, group 2 is very secular, and they don't perceive any conflict in the room.  Group 3 stands out for having a higher percentage of non-white and non-asian physicians, but otherwise they're very hard to tell from group 1. 
+
+##### Lastly question 1c: Do the clusters correlate with how the actors or physician colleagues rated the doctors?
+
+```{r, warning=FALSE, message=FALSE}
+    SPTable<-dta %>%
+        mutate(Race = fct_collapse(race, 
+                                   white = "White", 
+                                   asian = "Asian", 
+                                   other = c("Black or African American", "More than one race", "Prefer not to answer"))) %>%
+        mutate(Religion_importance = fct_collapse(religion_importance, 
+                                   high = c("Extremely", "Very"), 
+                                   moderate = "Moderately", 
+                                   low = c("Slightly", "Not at all"), 
+                                   Missing = "Prefer not to answer")) %>%
+        select(cluster, sp, comfort, disagreement, effort_to_help, effort_to_listen, effort_to_include, death)
+        
+        CreateTableOne(strata = "cluster", data=SPTable)
+```
+Fascinating.  So, standardized patient "H" is over-represented in cluster 3, and "K" is disproportionately in cluster 2.  
+Cluster 2 was way more likely to offer the option of care focused on comfort, and nearly everyone disclosed death.      
+
+
 
 *Narrative and Summary: What did you learn about the data? How did you answer the questions? How can you justify your answers? What are the limitations of the analyses?
