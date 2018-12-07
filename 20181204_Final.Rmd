@@ -24,8 +24,8 @@ library("tidyverse")
         b. Are there physician characteristics that are correlated with the 3 clusters?
         c. Do the clusters correlate with how the actors or physician colleagues rated the doctors?
 
-2. Which textual features best predict whether the physician colleagues think prognosis for survival was disclosed? Are there correlations between either MD characteristics or actor rating and predicted probability the colleagues think the physician disclosed prognosis?
-    
+2. Which textual features best predict whether the physician colleagues think prognosis for survival was disclosed? 
+        b. Are there correlations between either MD characteristics and predicted probability of prognosis disclosure?
 
 
 ### Data: What is the data source? Document the data import, wrangling, etc.
@@ -112,9 +112,9 @@ sum_measures<-sum_measures %>%
     mutate(he_his_prop=signif(he_his/wrd_total, 3))  %>%         ## Proportion of all words that are "he" or "his"
     
     mutate(phys_verb_prop=signif(phys_verb_cnt/wrd_cnt_phys, 3)) %>%     ## Proportion of physician words that are verbs
-    mutate(phys_noun_prop=signif(phys_noun_cnt/wrd_cnt_phys, 3)) %>%     ## Proportion of physician words that are verbs
-    mutate(phys_adj_prop=signif(phys_adjective_cnt/wrd_cnt_phys, 3)) %>% ## Proportion of physician words that are verbs
-    mutate(phys_adv_prop=signif(phys_adverb_cnt/wrd_cnt_phys, 3))%>%     ## Proportion of physician words that are verbs
+    mutate(phys_noun_prop=signif(phys_noun_cnt/wrd_cnt_phys, 3)) %>%     ## Proportion of physician words that are nouns
+    mutate(phys_adj_prop=signif(phys_adjective_cnt/wrd_cnt_phys, 3)) %>% ## Proportion of physician words that are adjectives
+    mutate(phys_adv_prop=signif(phys_adverb_cnt/wrd_cnt_phys, 3))%>%     ## Proportion of physician words that are adverbs
     
     mutate(voa_prop=signif(voa_cnt/wrd_total, 3)) %>%                    ## Proportion of words in the VOA lexicon
     mutate(nlm_prop=signif(nlm_minus_voa_cnt/wrd_total, 3)) %>%          ## Proportion of words in the nlm but not not VOA lexicon
@@ -281,12 +281,8 @@ library("rafalib")
     matrix_measures<-sum_measures %>%
         select(-c(uid))
 
-    ## Looking for NAs that can screw up these next functions
-    matrix_measures %>%
-            summarise_all(funs(sum(is.na(.))))
-    
-    ## This is an easy fix - this was coded NA if colleagues didn't think they disclosed prognosis at all, let alone explicitly. 
     matrix_measures[which(is.na(matrix_measures$death_word)), "death_word"]    <-"No"
+    sum_measures$death_word<-factor(sum_measures$death_word)
     
     ## Distance matrices using two measures
     d_euclid = dist(matrix_measures, method="euclidean")
@@ -305,7 +301,7 @@ library("rafalib")
     myplclust(hc_manhat, lab.col = as.numeric(as.factor(dta$tx)), cex=0.5)  
 ```
 
-Nope, nothing related to trial arm but 3 clear clusters with an outlier.
+Nope, nothing related to trial arm but 3 clear clusters with a serious outlier.
 
 ```{r, warning=FALSE, message=FALSE}    
     ## And now looking at whether there's a pattern by whether colleagues thought prognosis was disclosed
@@ -381,6 +377,135 @@ What's most striking here is how few physician characteristics differ by cluster
 Fascinating.  So, standardized patient "H" is over-represented in cluster 3, and "K" is disproportionately in cluster 2.  
 Cluster 2 was way more likely to offer the option of care focused on comfort, and nearly everyone disclosed death.      
 
+##### Moving on to my second question: 
+2. Which textual features best predict whether the physician colleagues thought prognosis for survival was disclosed? 
+        2b. Are there correlations between either MD characteristics and predicted probability of prognosis disclosure?
+        
+Looking at measures of variable importance for bagged trees. 
+```{r, warning=FALSE, message=FALSE}
+library("rpart")
+library("caret")
+        control <- trainControl(method="repeatedcv", number=5, repeats=3)  ## 5 folds in cross validation, repeated 3 times
+        seed <- 12072018
+        metric <- "Accuracy"
+    
+        ## Adding the outcome variable to this dataframe
+        sum_measures<-sum_measures %>%
+                        arrange(uid) %>%
+                        mutate(disclose = as.factor(dta$death))
+        
+        sum_measures[which(is.na(sum_measures$death_word)), "death_word"]    <-"No"
+        
+        ## Creating a collection of bagged trees to classify transcripts by whether the colleagus thought prognosis was disclosed. 
+        fit_bagging<- train(disclose ~., data=select(sum_measures, -uid, -cluster, -wrd_cnt_phys, -wrd_cnt_prox), 
+                            method="treebag", metric=metric, trControl=control)
+        
+        bagImp<-varImp(fit_bagging, scale = FALSE)
+        bagImp_scaled<-varImp(fit_bagging, scale = TRUE)
+        plot(bagImp_scaled, top = 10)
+```
+The predictive nature of the words "I" and "my" are fascinating to me.  I can definitely come up with some hypotheses about what role those pronouns are playing. Lets see how well these results hold up with different classification techniques. 
+
+
+Looking at measures of variable importance for boosted trees.
+```{r, warning=FALSE, message=FALSE}
+library("gbm")    
+fit_boost<- train(disclose ~., data=select(sum_measures, -uid, -cluster, -wrd_cnt_phys, -wrd_cnt_prox), 
+                            method="gbm", metric=metric, trControl=control, verbose=FALSE)
+        
+        boostImp<-varImp(fit_boost, scale = FALSE)
+        boostImp_scaled<-varImp(fit_boost, scale = TRUE)
+        plot(boostImp_scaled, top = 10)
+```
+The top 2 remain strong with numbers 3 - 7 moving around a bit but the line-up remains similar. 
+
+Looking at mean minimal depth within a random forest.
+```{r, warning=FALSE, message=FALSE}
+    fit_rf<- train(disclose ~., data=select(sum_measures, -uid, -cluster, -wrd_cnt_phys, -wrd_cnt_prox), 
+                            method="rf", metric=metric, trControl=control)
+        rfImp<-varImp(fit_rf, scale = FALSE)
+        rfImp_scaled<-varImp(fit_rf, scale = TRUE)
+        plot(rfImp_scaled, top = 10)
+```
+The two top have switched places and using one fo the D-words ranks higher, but the general pattern remains the same: Duration in minutes and the proportion of words which were either "I" or "my".
+
+
+There are a bunch of other fun ways to look at the results of random forests I'd like to explore.
+```{r, warning=FALSE, message=FALSE}
+library("randomForest")
+library("randomForestExplainer")
+    set.seed(20181207)
+    rf2<- randomForest(disclose ~., data=select(sum_measures, -uid, -cluster, -wrd_cnt_phys, -wrd_cnt_prox), localImp=TRUE)
+    min_depth_frame<-min_depth_distribution(rf2)
+    plot_min_depth_distribution(min_depth_frame, mean_sample = "all_trees", k=10) 
+```
+
+Very cool, so, again, the "I/my" pronouns remain strong.  Sentiment pattern ranked a little more highly.  
+
+Lets look at a couple more measures for these variables. 
+```{r, warning=FALSE, message=FALSE}
+        importance_frame <- measure_importance(rf2)
+        plot2<-plot_multi_way_importance(importance_frame, x_measure = "mean_min_depth", y_measure="p_value", no_of_labels = 5)
+        plot2+
+            geom_hline(aes(yintercept=0.05))
+```
+This is a nice example of why any given p-value cut-off is far from the whole story. 
+
+Lets take a quick peek at interactions
+```{r, warning=FALSE, message=FALSE}
+    plot_predict_interaction(rf2, data=select(sum_measures, -uid, -cluster, -wrd_cnt_phys, -wrd_cnt_prox), "mins", "i_my_prop")
+```
+
+So, if the MD's in the room for more than 15 minutes and more than 1% of their words are either "I" or "my", that's a really good sign. 
+
+
+```{r, warning=FALSE, message=FALSE}
+    plot_predict_interaction(rf2, data=select(sum_measures, -uid, -cluster, -wrd_cnt_phys, -wrd_cnt_prox), "pattern_sent", "i_my_prop")
+```
+
+##### Last question - are there correlations between physician characterists and the probability they'd be classified as disclosing prognosis?
+```{r, warning=FALSE, message=FALSE}
+    rf_probs<-predict(fit_rf, type="prob")
+    rf_probs$uid<-1:116 
+    dta<-dta %>%
+        merge(rf_probs, by="uid") %>%
+        rename(rf_ProbYes = "Yes", rf_ProbNo = "No") 
+    dta<-dta %>%
+        mutate(death_word = ifelse(death_word=="Yes", "Yes", "No"))
+    
+dta_long_con<-dta %>%
+    select(uid, age, icu_weeks, disagreement_perceived, effort_to_help, effort_to_listen, effort_to_include, rf_ProbYes, death) %>%
+    gather(key=feature, value = value, -uid, -rf_ProbYes, -death) 
+
+dta_long_con %>%
+    ggplot(aes(rf_ProbYes, value, colour = death)) +
+    geom_point(alpha=0.25)+
+    facet_wrap( ~feature, scales='free', ncol=3) +
+    labs(x = NULL, y = NULL) +
+    theme_bw()
+
+dta_long_cat<-dta %>%
+     mutate(Race = fct_collapse(race, 
+                                   white = "White", 
+                                   asian = "Asian", 
+                                   other = c("Black or African American", "More than one race", "Prefer not to answer"))) %>%
+     mutate(Religion_importance = fct_collapse(religion_importance, 
+                                   high = c("Extremely", "Very"), 
+                                   moderate = "Moderately", 
+                                   low = c("Slightly", "Not at all"), 
+                                   Missing = "Prefer not to answer")) %>%
+     select(-c(age, age, icu_weeks, disagreement_perceived, effort_to_help, effort_to_listen, effort_to_include, comfort, comfort_understandable, 
+              assesser, rf_ProbNo, withdraw, state, prognosis_mc, religion_importance, race)) %>%
+    gather(key=feature, value = value, -uid, -rf_ProbYes, -death) 
+
+dta_long_cat %>%
+    ggplot(aes(value, rf_ProbYes)) +
+    geom_boxplot(alpha=0.25) +
+    facet_wrap( ~feature, scales='free', ncol=5) +
+    labs(x = NULL, y = NULL) +
+    theme_bw()    
+```
+Ok, still need to fix "Death_word" variable, re-order the religion importance, drop prognosis survive, and disagreement. 
 
 
 *Narrative and Summary: What did you learn about the data? How did you answer the questions? How can you justify your answers? What are the limitations of the analyses?
