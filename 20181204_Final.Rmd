@@ -1,5 +1,5 @@
 ---
-title: "20181204_140712_Final"
+title: "140.712 Advanced Data Science Final Project"
 author: "Alison E. Turnbull"
 date: "December 4, 2018"
 output: html_document
@@ -10,31 +10,47 @@ knitr::opts_chunk$set(echo = TRUE)
 library("tidyverse")
 ```
 
-### Motivation and Overview: Provide an overview of the project goals and the motivation for it. Consider that this will be read by people who did not see your project proposal.
+#### Motivation and Overview: Provide an overview of the project goals and the motivation for it. Consider that this will be read by people who did not see your project proposal.
 
-### Related Work: Anything that inspired you, such as a paper, a web site, or something we discussed in class.
+In the United States, many people are treated in intensive care units (ICUs) in the final months of their lives.  For some people, ICU care is appropriate and helpful.  But many people with incurable diseases would prefer to be awake and at home with their families at the end of their lives, even if that means dying sooner.  To ensure that patients and their families know about their options when they're at high risk of dying the [**Choosing Wisely**](http://www.choosingwisely.org/) campaign made the following recommendation in 2014: 
+
+> [*"Don’t continue life support for patients at high risk for death or severely impaired functional recovery without offering patients and their families the alternative of care focused entirely on comfort."*](http://www.choosingwisely.org/clinician-lists/critical-care-societies-collaborative-life-support-for-patients-at-high-risk-for-death-or-severely-impaired-functional-recovery/)
+
+Unfortunately, widespread adoption of this recommendation in clinical practice has been difficult.  Most doctors want to communicate clearly with the families of their critically ill patients, but many aren't sure what to say or how to say it, in part because there isn't much evidnce-based guidance on how to communicate effectively in this setting.  
+
+Last year I conducted a randomized trial (clinicaltrials.gov: NCT02721810) in the [Simulation Center at Johns Hopkins](https://www.hopkinsmedicine.org/simulation_center/index.html) to test whether prompting ICU doctors to think about long term prognosis would improve adhereance to the guideline.  During the trial, 116 ICU doctors from around the U.S. provided data on their training and demographics (A), came to the Simulation Center and each reviewed the medical record of a single hypothetical ICU patient.  Doctors in the control group (B1) were prompted to think about the pateint's medical treatment plan.  Doctors in the control group we prompted to think about both the medical treatment plan, and the pateint's long-term prognosis (B2). The hypothetical patient was in his 80s, unlikely to survive his current illness, and unable to communicate.  Each doctor then participated in a simulated family meeting with an actress playing the hypothetical patient's daughter (C). These simulated meetings were video and audio recorded and then transcribed into de-identified written transcripts (E).  The physicians and actors then provided feedback on the simulation (D), and two ICU physicians independently reviewed deidentified versions of the transcripts (F) and answered the question: *“Did this intensivist communicate that the patient may die as a result of his current illness despite treatment?”*
+
+![Trial procedures](images/MGW9PMJS_Illustration_draft3.tif)
+
+I'm hopeful these transcripts can help us understand how ICU doctors talk to family members when they believe a patient is likely to die. It's hard to find out what happens during these meetings in the real world, in part because doctors and families frequently disagree.  
+
+#### Related Work: Anything that inspired you, such as a paper, a web site, or something we discussed in class.
+
+The trial was a follow-up to a [trial using online vignettes published in 2014](https://www.ncbi.nlm.nih.gov/pubmed/24584065). 
+
+I've always felt a little uneasy about the way recordings of ICU family meetings are usually analyzed in my field.  Most investigators use grounded theory which involves humans reading transcripts and looking for patterns.  
+
+#####EXAMPLES
+[The Language of Prognostication in Intensive Care Units](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2812635/)  
+[Direct observation of prognosis communication in palliative care: a descriptive study](https://www.ncbi.nlm.nih.gov/pubmed/22652135)  
+[Characterizing the Nature of Scan Results Discussions: Insights Into Why Patients Misunderstand Their Prognosis](https://www.ncbi.nlm.nih.gov/pubmed/28095172)
+
+But humans aren't great at recognizing complex patterns involving more than a few variables, so this seems like a task that machine learning techniques might shed new light on. 
 
 ### Initial Questions: What questions are you trying to answer? How did these questions evolve over the course of the project? What new questions did you consider in the course of your analysis?
 
-##### The two main questions I want to answer are: 
+The two main questions I want to answer are:
+**1. Are there patterns in the way physicians in this study talked to family members during the simulated family meetings?**
+        a. Are there textual features within the simulation transcripts that cluster together? If so, how can the clusters be described?
+        b. Are there physician characteristics that correlate with clusters created by text features?
+        c. Do clusters correlate with how actors or blinded physician colleagues interpreted the doctors in the study?
 
-1. Are there patterns in the way physicians in this study conversed with family members during the simulated family meetings? 
-        a. Are there textual features within the simulation transcripts that cluster together? 
-            + If so, how can the clusters be described?
-        b. Are there physician characteristics that are correlated with the 3 clusters?
-        c. Do the clusters correlate with how the actors or physician colleagues rated the doctors?
-
-2. Which textual features best predict whether the physician colleagues think prognosis for survival was disclosed? 
+**2. Which textual features best predict whether the blinded physician colleagues thought prognosis for survival was disclosed?**
         a. Are there correlations between either MD characteristics and predicted probability of prognosis disclosure?
 
 
-### Data: What is the data source? Document the data import, wrangling, etc.
-
-##### These data were collected as part of an IRB-approved randomized train of an intervention designed 
-
-
-
-##### Because there are potential identifiers in the data, I am going to create a de-identified version for this analysis.  This next chunk cannot be evaluated, but it will show you where the data frame containing data on physician characteristics came from and how it was wrangled.  I will then remove these data frames, leaving behind only the di-identified version for the rest of this analysis. 
+#### Data: What is the data source? Document the data import, wrangling, etc.
+Because there are potential identifiers in the data, I am going to create a de-identified version for this analysis.  This next chunk will not be evaluated, but it will show you where the data frame containing data on physician characteristics came from and how it was wrangled.  I will then remove these data frames, leaving behind only the di-identified version for the rest of this analysis. 
 ```{r, warning=FALSE, message=FALSE, eval=FALSE}
 ## Loading in the study data which is contained in multiple dataframes connected by a shared unique identifier variable called "uid"
     load("X:/Moore Early Career Investigator Award/Aim 3/Study Data/Data shared with Di Chen/[20180312] dataset v5/20180313_SCIP data & codebook.RData")
@@ -74,7 +90,9 @@ library("tidyverse")
     write_csv(dta, "140.712_Final_dta.csv") 
 ```
 
-##### Reading in sharable csv files  
+
+Reading in sharable csv files  
+Summary_measures.csv was created by [Gary Weissman, MD, MSHP](https://www.med.upenn.edu/apps/faculty/index.php/g353/p6504556) at UPenn. Thanks Gary!
 ```{r, warning=FALSE, message=FALSE}
     dta<-read_csv("140.712_Final_dta.csv")
     sum_measures<-read_csv("summary_measures.csv")
@@ -86,7 +104,7 @@ library("tidyverse")
     sum_measures<-merge(sum_measures, duration, by="uid")
 ```
 
-##### Cleaning the summary measures and creating new variables
+Cleaning the summary measures and creating new variables
 ```{r}
     dta<-dta %>% arrange(uid)
     sum_measures<-sum_measures %>% arrange(uid)
@@ -120,8 +138,7 @@ sum_measures<-sum_measures %>%
     mutate(nlm_prop=signif(nlm_minus_voa_cnt/wrd_total, 3)) %>%          ## Proportion of words in the nlm but not not VOA lexicon
     mutate(death_word=dta$death_word)                                    ## Also, there's a variable currently in the "dta" dataframe which indicates whether the physician used the words "death", "die", or "dying."
     
-    
-    ## Keeping the scaled, cleaned features
+    ## Keeping the cleaned features
     sum_measures<-sum_measures %>%
         select(uid, wrd_total, wrd_cnt_phys, wrd_cnt_prox, wrdratio_physprox, mins, totalwrd_per_min, 
               physwrd_per_min, proxwrd_per_min, uttratio_physprox, mean_wrds_uttr_phys, median_wrds_uttr_phys, 
@@ -133,10 +150,10 @@ sum_measures<-sum_measures %>%
 ```
 
 
-*Exploratory Data Analysis: What visualizations did you use to look at your data in different ways? What are the different statistical methods you considered? Justify the decisions you made, and show any major changes to your ideas. How did you reach these conclusions? You should use this section to motivate the statistical analyses that you decided to use in the next section.
+##### Exploratory Data Analysis: What visualizations did you use to look at your data in different ways? What are the different statistical methods you considered? Justify the decisions you made, and show any major changes to your ideas. How did you reach these conclusions? You should use this section to motivate the statistical analyses that you decided to use in the next section.
 
 
-##### First exploring the physician characteristics
+First exploring the physician characteristics using density plots
 ```{r}
 dta_long_con<-dta %>%
     select(uid, age, icu_weeks, disagreement, disagreement_perceived, effort_to_help, effort_to_listen, effort_to_include) %>%
@@ -161,9 +178,10 @@ dta_long_cat %>%
     theme_bw()
 ```
 
+Looking at the relationships between MD characteristics, their case management, and their colleagues' assessment of whether prognosis for survival was disclosed
 ```{r, warning=FALSE, message=FALSE}
 library("GGally")
-## Relationships between MD characteristics their case management, and their colleagues' assessment of whether prognosis for survival was disclosed
+
 dta %>%
     mutate(religion=ifelse(religion_importance=="Extremely" | religion_importance=="Very" | religion_importance=="Moderately", 1, 0)) %>%
     mutate(religion=factor(religion)) %>%
@@ -171,24 +189,22 @@ dta %>%
     ggpairs()
 ```    
 
-
+Relationships between how actors perceived the physicians and whether the physicians reported conflict during the simulation, colored by disclosure
 ```{r, warning=FALSE, message=FALSE}
-## Relationships between how actors perceived the physicians and whether the physicians reported conflict during the simulation, colored by disclosure    
 dta %>%
     select(disagreement, effort_to_help, effort_to_listen, effort_to_include, disagreement_perceived, death) %>%
     ggpairs(aes(color=factor(death)))
 ```
 
+Relationships between how actors perceived the physicians and whether the physicians reported conflict during the simulation, colored by actor    
 ```{r, warning=FALSE, message=FALSE}
-## Relationships between how actors perceived the physicians and whether the physicians reported conflict during the simulation, colored by actor    
 dta %>%
     select(disagreement, effort_to_help, effort_to_listen, effort_to_include, disagreement_perceived, sp) %>%
     ggpairs(aes(color=factor(sp)))
 ```
 
-
+Now exploring the transcript characteristics
 ```{r, warning=FALSE, message=FALSE}
-## Now exploring the transcript characteristics
 transcripts_long<-sum_measures %>%
     gather(key=feature, value = value, -uid) 
 
@@ -200,8 +216,8 @@ transcripts_long %>%
         theme_bw()
 ```
 
+Exploring transcript features by whether colleagues thought prognosis was disclosed
 ```{r, warning=FALSE, message=FALSE}
-## Transcript features by whether colleagues thought death was disclosed
 sum_measures %>%
     arrange(uid) %>%
     mutate(disclose = dta$death) %>%
@@ -216,7 +232,7 @@ sum_measures %>%
     select(mins, totalwrd_per_min, physwrd_per_min, proxwrd_per_min, disclose) %>%
     ggpairs(aes(color=factor(disclose), alpha=0.5))
 ```
-##### Wow.  So, meetings were a little longer, and there are definitely fewer words per minute spoken when prognosis was disclosed. 
+Wow. So, meetings were a little longer, and there are definitely fewer words per minute spoken when prognosis was disclosed. 
 
 ```{r, warning=FALSE, message=FALSE}
 sum_measures %>%
@@ -225,8 +241,8 @@ sum_measures %>%
     select(uttratio_physprox, mean_wrds_uttr_phys, median_wrds_uttr_phys, mean_wrds_uttr_prox, median_wrds_uttr_prox, disclose) %>%
     ggpairs(aes(color=factor(disclose), alpha=0.5))
 ```
-##### Huh, looks like physicians always speak in paragraphs of about the same length, but proxies spoke a little longer if prognosis was disclosed. 
-##### There are some physician:proxy utterance ratio outliers that are interesting too. 
+Huh, looks like physicians always speak in paragraphs of about the same length, but proxies spoke a little longer if prognosis was disclosed. 
+There are some physician:proxy utterance ratio outliers that are interesting too. 
 
 ```{r, warning=FALSE, message=FALSE}
 sum_measures %>%
@@ -235,7 +251,7 @@ sum_measures %>%
     select(voa_prop, nlm_prop, fk_score, gf_score, disclose) %>%
     ggpairs(aes(color=factor(disclose), alpha=0.5))
 ```
-##### What's interseting is how little variability there is here.  Disclosure does NOT appear to be correlated with how simple or complex physician language is. 
+What's interseting is how little variability there is here.  Disclosure does NOT appear to be correlated with how simple or complex physician language is. 
 
 ```{r, warning=FALSE, message=FALSE}
 sum_measures %>%
@@ -244,7 +260,7 @@ sum_measures %>%
     select(pattern_sent, wwbp_to_past, wwbp_to_present, wwbp_to_future, disclose) %>%
     ggpairs(aes(color=factor(disclose), alpha=0.5))
 ```
-##### Really nothing of obvious interest here. 
+Really nothing of obvious interest here. 
 
 ```{r, warning=FALSE, message=FALSE}
 sum_measures %>%
@@ -253,7 +269,7 @@ sum_measures %>%
     select(i_my_prop, you_your_prop, she_her_prop, he_his_prop, disclose) %>%
     ggpairs(aes(color=factor(disclose), alpha=0.5))
 ```
-### Huh.  There's an interesting shift toward the words "i" and "my" when prognosis is disclosed. 
+Huh.  There's an interesting shift toward the words "i" and "my" when prognosis is disclosed. 
 
 ```{r, warning=FALSE, message=FALSE}
 sum_measures %>%
@@ -262,21 +278,20 @@ sum_measures %>%
     select(phys_verb_prop, phys_noun_prop, phys_adj_prop, phys_adv_prop, death_word, disclose) %>%
     ggpairs(aes(color=factor(disclose), alpha=0.5))
 ```
-##### I'm not seeing anything very interesting here.  
+I'm not seeing anything very interesting here.  
+
+Ok, so after looking at all those plots there just aren't any strong, obvious relationships.  Probably that's because none exist, but maybe they involve complex interactions. I don't have any hypotheses about how many clusters there may be, so an agglomerative ("bottom up") approach seems most appropriate.   
 
 
-*Data Analysis: What statistical or computational method did you apply and why? What others did you consider?
 
-1. Are there patterns in the way physicians in this study conversed with family members during the simulated family meetings? 
-        a. Are there textual features within the simulation transcripts that cluster together? 
-            + If so, how can the clusters be described?
-            + Are there strong correlations between cluster and physician characteristics?
-            + Do the clusters correlate with how the actors or physician colleagues rated the doctors?
+##### Data Analysis: What statistical or computational method did you apply and why? What others did you consider?
+1. Are there patterns in the way physicians in this study talked to family members during the simulated family meetings?**
+        a. Are there textual features within the simulation transcripts that cluster together? If so, how can the clusters be described?
 
+Step 1: computing the distance between each transcript using two different distances - euclidean and manhattan
 ```{r, warning=FALSE, message=FALSE}
 library("rafalib")
 
-## Step 1: computing the distance between each transcript using two different distances
     matrix_measures<-sum_measures %>%
         select(-c(uid))
 
@@ -286,7 +301,10 @@ library("rafalib")
     ## Distance matrices using two measures
     d_euclid = dist(matrix_measures, method="euclidean")
     d_manhat = dist(matrix_measures, method="manhattan")
-    
+```
+        
+Now lets visualize the results using dendograms        
+```{r, warning=FALSE, message=FALSE}
     ## Hierarchical clustering
     hc_euclid<-hclust(d_euclid)
     hc_manhat<-hclust(d_manhat)
@@ -299,7 +317,6 @@ library("rafalib")
     myplclust(hc_euclid, lab.col = as.numeric(as.factor(dta$tx)), cex=0.5)  
     myplclust(hc_manhat, lab.col = as.numeric(as.factor(dta$tx)), cex=0.5)  
 ```
-
 Nope, nothing related to trial arm but 3 clear clusters with a serious outlier.
 
 ```{r, warning=FALSE, message=FALSE}    
@@ -320,10 +337,7 @@ There looks like there are 3 pretty clear clusters and #72 is a real outlier.
     sum_measures[which(sum_measures$uid==72), "cluster"]<-2  #I'm moving this outlier into cluster 2 so we only have 3 groups.
 ```
 
-#####Returning to my first question: 
-1. Are there patterns in the way physicians in this study conversed with family members during the simulated family meetings? 
-        a. Are there textual features within the simulation transcripts that cluster together? 
-            + If so, how can the clusters be described?
+
 ```{r}
     library("tableone")
     CreateTableOne(strata="cluster", data=sum_measures)
@@ -331,8 +345,8 @@ There looks like there are 3 pretty clear clusters and #72 is a real outlier.
 
 Cool!  Cluster 2 is really interesting - these 14 simulations were almost twice as long, had nearly twice as many words, and more physician words per minute but no more proxy words per minute.  There were also more words per physician utterance, and they were about twice as likely to say the one of the big D words (death, die, or dying).  Differentiating between clusters 1 and 3 is a little harder, but cluster 3 were VERY short meetings in general.  I wonder if they cluster 3 is the physicians who essentially just went in the room and gave a quick update.  
 
-##### Moving on to question 1b. Are there physician characteristics that are correlated with the 3 clusters?
 
+Moving on to question 1b. Are there physician characteristics that correlate with clusters created by text features?
 ```{r, warning=FALSE, message=FALSE}
 ## Attaching these cluster designations to the dataframe of physician characteristics
     dta$cluster<-eu_clusters
@@ -354,10 +368,9 @@ Cool!  Cluster 2 is really interesting - these 14 simulations were almost twice 
         CreateTableOne(strata = "cluster", data=MDTable)
 ```
 
-What's most striking here is how few physician characteristics differ by cluster.  So, group 2 is very secular, and they don't perceive any conflict in the room.  Group 3 stands out for having a higher percentage of non-white and non-asian physicians, but otherwise they're very hard to tell from group 1. 
+What's most striking here is how FEW physician characteristics differ by cluster.  Group 2 looks more secular, and they don't perceive any conflict in the room, but otherwise, there's nothing notable about them.  Group 3 stands out for having a higher percentage of non-white and non-asian physicians, but otherwise they're very hard to tell from group 1. 
 
-##### Lastly question 1c: Do the clusters correlate with how the actors or physician colleagues rated the doctors?
-
+Finally, question c. Do clusters correlate with how actors or blinded physician colleagues interpreted the doctors in the study?
 ```{r, warning=FALSE, message=FALSE}
     SPTable<-dta %>%
         mutate(Race = fct_collapse(race, 
@@ -376,9 +389,9 @@ What's most striking here is how few physician characteristics differ by cluster
 Fascinating.  So, standardized patient "H" is over-represented in cluster 3, and "K" is disproportionately in cluster 2.  
 Cluster 2 was way more likely to offer the option of care focused on comfort, and nearly everyone disclosed death.      
 
-##### Moving on to my second question: 
-2. Which textual features best predict whether the physician colleagues thought prognosis for survival was disclosed? 
-        2b. Are there correlations between either MD characteristics and predicted probability of prognosis disclosure?
+*Moving on to my second question*
+**2. Which textual features best predict whether the blinded physician colleagues thought prognosis for survival was disclosed?**
+        a. Are there correlations between either MD characteristics and predicted probability of prognosis disclosure?
         
 Looking at measures of variable importance for bagged trees. 
 ```{r, warning=FALSE, message=FALSE}
@@ -404,7 +417,6 @@ library("caret")
         plot(bagImp_scaled, top = 10)
 ```
 The predictive nature of the words "I" and "my" are fascinating to me.  I can definitely come up with some hypotheses about what role those pronouns are playing. Lets see how well these results hold up with different classification techniques. 
-
 
 Looking at measures of variable importance for boosted trees.
 ```{r, warning=FALSE, message=FALSE}
@@ -438,7 +450,6 @@ library("randomForestExplainer")
     min_depth_frame<-min_depth_distribution(rf2)
     plot_min_depth_distribution(min_depth_frame, mean_sample = "all_trees", k=10) 
 ```
-
 Very cool, so, again, the "I/my" pronouns remain strong.  Sentiment pattern ranked a little more highly.  
 
 Lets look at a couple more measures for these variables. 
@@ -454,7 +465,6 @@ Lets take a quick peek at interactions
 ```{r, warning=FALSE, message=FALSE}
     plot_predict_interaction(rf2, data=select(sum_measures, -uid, -cluster, -wrd_cnt_phys, -wrd_cnt_prox), "mins", "i_my_prop")
 ```
-
 So, if the MD's in the room for more than 15 minutes and more than 1% of their words are either "I" or "my", that's a really good sign. 
 
 
@@ -462,49 +472,21 @@ So, if the MD's in the room for more than 15 minutes and more than 1% of their w
     plot_predict_interaction(rf2, data=select(sum_measures, -uid, -cluster, -wrd_cnt_phys, -wrd_cnt_prox), "pattern_sent", "i_my_prop")
 ```
 
-##### Last question - are there correlations between physician characterists and the probability they'd be classified as disclosing prognosis?
-```{r, warning=FALSE, message=FALSE}
-    rf_probs<-predict(fit_rf, type="prob")
-    rf_probs$uid<-1:116 
-    dta<-dta %>%
-        merge(rf_probs, by="uid") %>%
-        rename(rf_ProbYes = "Yes", rf_ProbNo = "No") 
-    dta<-dta %>%
-        mutate(death_word = ifelse(death_word=="Yes", "Yes", "No"))
-    
-dta_long_con<-dta %>%
-    select(uid, age, icu_weeks, disagreement_perceived, effort_to_help, effort_to_listen, effort_to_include, rf_ProbYes, death) %>%
-    gather(key=feature, value = value, -uid, -rf_ProbYes, -death) 
+##### Narrative and Summary: 
+*What did you learn about the data?* 
+In general, the vast majority of these textual features do not differ much across the physicains, are not strongly correlated with which arm of the trial physicains were randomized to, or with whether they chose to disclose prognosis.  There does appear to be a group of about 14 doctors (group 2) with a distinctly different approach who meet with families for longer, dominate the conversation, didn't perceive any conflict, and almost universally disclosed prognosis.  Whether there's truly a difference between groups 1 and 3 is less clear.  
 
-dta_long_con %>%
-    ggplot(aes(rf_ProbYes, value, colour = death)) +
-    geom_point(alpha=0.25)+
-    facet_wrap( ~feature, scales='free', ncol=3) +
-    labs(x = NULL, y = NULL) +
-    theme_bw()
+When trying to predict whether colleagues will categorize a meeting as including disclosure of prognosis, the two things that are probably most fruitful to focus on are duration and the proportion of the physicains words that were either "I" or "my".  Understanding why physicians used the words I/my more frequently when they were going to disclose prognosis requires more follow-up study to understand but I have a hypothesis which I'll try to demonstrateusing samples of langauge on the study website. 
 
-dta_long_cat<-dta %>%
-     mutate(Race = fct_collapse(race, 
-                                   white = "White", 
-                                   asian = "Asian", 
-                                   other = c("Black or African American", "More than one race", "Prefer not to answer"))) %>%
-     mutate(Religion_importance = fct_collapse(religion_importance, 
-                                   high = c("Extremely", "Very"), 
-                                   moderate = "Moderately", 
-                                   low = c("Slightly", "Not at all"), 
-                                   Missing = "Prefer not to answer")) %>%
-     select(-c(age, age, icu_weeks, disagreement_perceived, effort_to_help, effort_to_listen, effort_to_include, comfort, comfort_understandable, 
-              assesser, rf_ProbNo, withdraw, state, prognosis_mc, religion_importance, race)) %>%
-    gather(key=feature, value = value, -uid, -rf_ProbYes, -death) 
+*How did you answer the questions?* 
+I used agglomerative hierarchical clustering to look for patterns in how physicains spoke to the simulated patients. 
+I created aggregated decision trees (bagging, boosting, and random forests) to classify transcripts as disclosing or not disclosing prognosis to the patient's family and then looked at measures of variable importance to get a sense of which textual features are best for discriminating between these groups.  
 
-dta_long_cat %>%
-    ggplot(aes(value, rf_ProbYes)) +
-    geom_boxplot(alpha=0.25) +
-    facet_wrap( ~feature, scales='free', ncol=5) +
-    labs(x = NULL, y = NULL) +
-    theme_bw()    
-```
-Ok, still need to fix "Death_word" variable, re-order the religion importance, drop prognosis survive, and disagreement. 
+*How can you justify your answers?* 
+I'm not sure what you mean by this question.  I'm trying hard not to overstate.  
+
+*What are the limitations of the analyses?*
+There are so many!  To start with, I only had 116 samples and many of them were really random.  I'd also LOVE to have a validation sample to help evaluate my classifiers and see if these same clustering patterns show up.  Finally, I'd like to learn more about topic models and tidy text. But, time's up, assignment is due. 
 
 
-*Narrative and Summary: What did you learn about the data? How did you answer the questions? How can you justify your answers? What are the limitations of the analyses?
+
