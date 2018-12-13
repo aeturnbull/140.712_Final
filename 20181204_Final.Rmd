@@ -25,7 +25,7 @@ library("tidyverse")
         c. Do the clusters correlate with how the actors or physician colleagues rated the doctors?
 
 2. Which textual features best predict whether the physician colleagues think prognosis for survival was disclosed? 
-        b. Are there correlations between either MD characteristics and predicted probability of prognosis disclosure?
+        a. Are there correlations between either MD characteristics and predicted probability of prognosis disclosure?
 
 
 ### Data: What is the data source? Document the data import, wrangling, etc.
@@ -274,7 +274,6 @@ sum_measures %>%
             + Do the clusters correlate with how the actors or physician colleagues rated the doctors?
 
 ```{r, warning=FALSE, message=FALSE}
-install.packages("rafalib")
 library("rafalib")
 
 ## Step 1: computing the distance between each transcript using two different distances
