@@ -46,7 +46,6 @@ The two main questions I want to answer are:
         c. Do clusters correlate with how actors or blinded physician colleagues interpreted the doctors in the study?
 
 **2. Which textual features best predict whether the blinded physician colleagues thought prognosis for survival was disclosed?**
-        a. Are there correlations between either MD characteristics and predicted probability of prognosis disclosure?
 
 
 #### Data: What is the data source? Document the data import, wrangling, etc.
